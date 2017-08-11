@@ -41,6 +41,8 @@ parser.add_argument('--random_sample', action='store_true', help='whether to sam
 opt = parser.parse_args()
 print(opt)
 
+opt.alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ '
+
 if opt.experiment is None:
     opt.experiment = 'expr'
 os.system('mkdir {0}'.format(opt.experiment))
@@ -56,7 +58,7 @@ cudnn.benchmark = True
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-train_dataset = dataset.lmdbDataset(root=opt.trainroot)
+train_dataset = dataset.WatermarkTextDataset(root=opt.trainroot)
 assert train_dataset
 if not opt.random_sample:
     sampler = dataset.randomSequentialSampler(train_dataset, opt.batchSize)
@@ -67,7 +69,7 @@ train_loader = torch.utils.data.DataLoader(
     shuffle=True, sampler=sampler,
     num_workers=int(opt.workers),
     collate_fn=dataset.alignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio=opt.keep_ratio))
-test_dataset = dataset.lmdbDataset(
+test_dataset = dataset.WatermarkTextDataset(
     root=opt.valroot, transform=dataset.resizeNormalize((100, 32)))
 
 nclass = len(opt.alphabet) + 1
@@ -91,7 +93,11 @@ crnn = crnn.CRNN(opt.imgH, nc, nclass, opt.nh)
 crnn.apply(weights_init)
 if opt.crnn != '':
     print('loading pretrained model from %s' % opt.crnn)
-    crnn.load_state_dict(torch.load(opt.crnn))
+    state_dict = torch.load(opt.crnn)
+    class_count = len(opts.alphabet) + 1
+    state_dict['rnn.1.embedding.bias'] = torch.randn(class_count)
+    state_dict['rnn.1.embedding.weight'] = torch.randn(class_count, 512)
+    crnn.load_state_dict(state_dict)
 print(crnn)
 
 image = torch.FloatTensor(opt.batchSize, 3, opt.imgH, opt.imgH)
@@ -153,7 +159,8 @@ def val(net, dataset, criterion, max_iter=100):
         loss_avg.add(cost)
 
         _, preds = preds.max(2)
-        preds = preds.squeeze(2)
+        # no need to squeeze
+        # preds = preds.squeeze(2)
         preds = preds.transpose(1, 0).contiguous().view(-1)
         sim_preds = converter.decode(preds.data, preds_size.data, raw=False)
         for pred, target in zip(sim_preds, cpu_texts):

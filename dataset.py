@@ -9,8 +9,31 @@ import torchvision.transforms as transforms
 import lmdb
 import six
 import sys
+import pickle
 from PIL import Image
 import numpy as np
+
+
+class WatermarkTextDataset(Dataset):
+
+    def __init__(self, root, transform=None, target_transform=None):
+        data = pickle.loads(open(root, 'rb').read())
+        self.images = data['images']
+        self.labels = data['stats']
+        self.transform = transform
+        self.target_transform = target_transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        img = Image.fromarray(self.images[index]).convert('L')
+        label = self.labels[index]
+        if self.transform is not None:
+            img = self.transform(img)
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+        return img, label
 
 
 class lmdbDataset(Dataset):
