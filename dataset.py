@@ -17,9 +17,16 @@ import numpy as np
 class WatermarkTextDataset(Dataset):
 
     def __init__(self, root, transform=None, target_transform=None):
-        data = pickle.loads(open(root, 'rb').read())
-        self.images = data['images']
-        self.labels = data['stats']
+        self.images, self.labels = None, []
+        for f in root.split(','):
+            data = pickle.loads(open(f, 'rb').read())
+            images, labels = data['images'], data['stats']
+            self.images = np.concatenate((self.images, images)) if self.images is not None else images
+            self.labels += labels
+        label_length = np.array(list(map(len, self.labels)))
+        sorted_index = label_length.argsort()
+        self.images = self.images[sorted_index]
+        self.labels = np.array(self.labels)[sorted_index]
         self.transform = transform
         self.target_transform = target_transform
 
@@ -28,7 +35,7 @@ class WatermarkTextDataset(Dataset):
 
     def __getitem__(self, index):
         img = Image.fromarray(self.images[index]).convert('L')
-        label = self.labels[index]
+        label = self.labels[index].lower()
         if self.transform is not None:
             img = self.transform(img)
         if self.target_transform is not None:
