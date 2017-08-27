@@ -1,3 +1,4 @@
+import sys
 import torch
 from torch.autograd import Variable
 import utils
@@ -11,11 +12,17 @@ model_path = './data/crnn.pth'
 img_path = './data/demo.png'
 alphabet = '0123456789abcdefghijklmnopqrstuvwxyz'
 
-model = crnn.CRNN(32, 1, 37, 256)
+model_path = sys.argv[1]
+img_path = sys.argv[2]
+alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789!#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~ '
+
+model = crnn.CRNN(32, 1, len(alphabet) + 1, 256)
 if torch.cuda.is_available():
     model = model.cuda()
 print('loading pretrained model from %s' % model_path)
-model.load_state_dict(torch.load(model_path))
+state_dict = torch.load(model_path)
+state_dict = dict([(k[len('module.'):] if k.startswith('module.') else k, v) for k, v in state_dict.items()])
+model.load_state_dict(state_dict)
 
 converter = utils.strLabelConverter(alphabet)
 
